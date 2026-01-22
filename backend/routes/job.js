@@ -27,3 +27,99 @@ router.get('/all',authMiddleware,async(req,res)=>{
     }
 });
 module.exports=router;
+
+router.put('/:jobId',
+    authMiddleware,
+    roleMiddleware('employer', 'admin'),
+    async (req, res) => {
+        try {
+            const { jobId } = req.params;
+            const { title, description, location, salary } = req.body;
+
+            const job = await Job.findById(jobId);
+            if (!job) return res.status(404).json({ message: 'Job not found' });
+
+    
+            if (req.user.role === 'employer' && job.postedBy.toString() !== req.user.id) {
+                return res.status(403).json({ message: 'Access denied' });
+            }
+
+            job.title = title || job.title;
+            job.description = description || job.description;
+            job.location = location || job.location;
+            job.salary = salary || job.salary;
+
+            await job.save();
+
+            res.json({ message: 'Job updated successfully', job });
+
+        } catch (error) {
+            console.log(error);
+            res.status(500).json({ message: 'Server error' });
+        }
+    }
+);
+
+router.delete('/:jobId',
+    authMiddleware,
+    roleMiddleware('employer', 'admin'), 
+    async (req, res) => {
+        try {
+            const { jobId } = req.params;
+
+            const job = await Job.findById(jobId);
+            if (!job) return res.status(404).json({ message: 'Job not found' });
+
+            
+            if (req.user.role === 'employer' && job.postedBy.toString() !== req.user.id) {
+                return res.status(403).json({ message: 'Access denied' });
+            }
+
+            await job.remove();
+
+            res.json({ message: 'Job deleted successfully' });
+
+        } catch (error) {
+            console.log(error);
+            res.status(500).json({ message: 'Server error' });
+        }
+    }
+);
+
+router.get('/:jobId', authMiddleware, async (req, res) => {
+    try {
+        const { jobId } = req.params;
+
+        const job = await Job.findById(jobId).populate('postedBy', 'name email role');
+        if (!job) return res.status(404).json({ message: 'Job not found' });
+
+        res.json(job);
+
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// routes/application.js
+
+// GET all applications of logged-in job seeker
+router.get('/my-applications', authMiddleware, roleMiddleware('jobSeeker'), async (req, res) => {
+    try {
+        const applications = await Application.find({ applicant: req.user.id })
+            .populate('job', 'title description location salary');
+
+        if (!applications.length) {
+            return res.status(404).json({ message: 'No applications found' });
+        }
+
+        res.json({
+            message: 'Applications fetched successfully',
+            applications
+        });
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
